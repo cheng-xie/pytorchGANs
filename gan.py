@@ -10,7 +10,7 @@ class GAN:
         self.data = data
 
         # Dimensions of samples
-        self.sample_size = data.next()[0].size()
+        self.sample_size = iter(data).next()[0].size()
         # Dimensions of noise
         self.noise_size = generator.input_size()
 
@@ -19,20 +19,24 @@ class GAN:
         self.gen_optim = optim.Adam(self.gen.parameters())
         self.dis_optim = optim.Adam(self.dis.parameters())
 
-        self.dis_steps = 10
+        self.dis_steps = 30
         self.gen_steps = 1
+
+        self.data_iter = iter(data)
 
     def train(self, iters, batch_size):
         ''' Trains the GAN for some number of steps
         '''
         for _ in range(iters):
             # Train Discriminator
+            tot_loss_real = 0
+            tot_loss_fake = 0
             for _ in range(self.dis_steps):
                 self.dis.zero_grad()
 
                 # Backpropogate on true data
                 target = Variable(torch.ones(batch_size))
-                data_samples = Variable(self.sample_data(batch_size))
+                data_samples = Variable(self._sample_data(batch_size))
                 prediction = self.dis.forward(data_samples)
                 loss_real = self.criterion(prediction, target)
                 loss_real.backward()
@@ -47,8 +51,10 @@ class GAN:
                 loss_fake.backward()
 
                 self.dis_optim.step()
+                tot_loss_fake += loss_fake.data[0]
+                tot_loss_real += loss_real.data[0]
 
-                print('Disc', loss_fake.data[0], ' ', loss_real.data[0])
+            print('Disc', tot_loss_fake, ' ', tot_loss_real)
 
             # Train Generator
             for _ in range(self.gen_steps):
@@ -75,8 +81,12 @@ class GAN:
         fake_samples = self.gen.forward(noise)
         return fake_samples
 
-    def sample_data(self, num_samples):
+    def _sample_data(self, num_samples):
         ''' Draws num_samples samples from the data
         '''
-        return self.data.next()
+        try:
+            return self.data_iter.next()
+        except:
+            self.data_iter = iter(self.data)
+            return self.data_iter.next()
 
